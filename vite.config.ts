@@ -15,6 +15,7 @@ export default defineConfig({
         gallery: resolve(import.meta.dirname, 'index.html'),
         spaceInvaders: resolve(import.meta.dirname, 'games/space-invaders/index.html'),
         trailRunner: resolve(import.meta.dirname, 'games/trail-runner/index.html'),
+        neonStack: resolve(import.meta.dirname, 'games/neon-stack/index.html'),
       },
     },
   },

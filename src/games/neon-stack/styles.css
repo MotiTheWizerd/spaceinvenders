@@ -1,0 +1,33 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: #07060f;
+}
+
+body {
+  display: grid;
+  place-items: center;
+}
+
+#game {
+  display: block;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.back {
+  position: fixed;
+  top: 12px;
+  left: 14px;
+  z-index: 1;
+  font: 800 12px/1 system-ui, "Segoe UI", sans-serif;
+  letter-spacing: 0.1em;
+  color: #7a76a3;
+  text-decoration: none;
+}
+
+.back:hover,
+.back:focus-visible { color: #ff3df2; }

@@ -1,3 +1,5 @@
+import { HI_KEY as STACK_HI_KEY } from '../games/neon-stack/config';
+import * as stack from '../games/neon-stack/preview';
 import { HI_SCORE_KEY } from '../games/space-invaders/config';
 import * as invaders from '../games/space-invaders/preview';
 import { BEST_KEY } from '../games/trail-runner/config';
@@ -51,5 +53,14 @@ export const GAMES: readonly GameEntry[] = [
     controls: ['← → LANE', '↑ JUMP', '↓ SLIDE'],
     best: { key: BEST_KEY, label: 'BEST', format: n => `${n} m` },
     preview: { width: runner.PREVIEW_W, height: runner.PREVIEW_H, draw: runner.drawPreview },
+  },
+  {
+    title: 'Neon Stack',
+    tagline: 'Falling-block puzzling in glowing neon — hold, ghost piece, T-spins, combos and back-to-back bonuses.',
+    href: 'games/neon-stack/',
+    accent: '#ff3df2',
+    controls: ['← → MOVE', '↑ ROTATE', 'SPACE DROP', 'C HOLD'],
+    best: { key: STACK_HI_KEY, label: 'HI-SCORE', format: n => n.toLocaleString() },
+    preview: { width: stack.PREVIEW_W, height: stack.PREVIEW_H, draw: stack.drawPreview },
   },
 ];

@@ -34,10 +34,14 @@ function rowTypes(level: number): InvaderType[] {
   return [DIVER, ARMORED, ARMORED, OCTOPUS, OCTOPUS];
 }
 
-/** Banner subtitle on the wave where something new first appears. */
-export const WAVE_INTROS: Readonly<Record<number, string>> = {
+const WAVE_INTROS: Readonly<Record<number, string>> = {
   2: 'NEW: DIVERS & ARMOURED ALIENS',
 };
+
+/** Banner subtitle for a wave: what's new on it, or the mothership warning. */
+export function waveIntro(level: number): string | undefined {
+  return difficulty.isBossWave(level) ? 'WARNING: MOTHERSHIP APPROACHING' : WAVE_INTROS[level];
+}
 
 const INVADER_H = 8;
 const CELL = 16; // grid spacing
@@ -110,7 +114,9 @@ export class Fleet {
 
   reset(level: number): void {
     const top = TOP + difficulty.waveDrop(level) * DROP;
-    this.invaders = rowTypes(level).flatMap((type, row) =>
+    // The mothership fights alone.
+    const rows = difficulty.isBossWave(level) ? [] : rowTypes(level);
+    this.invaders = rows.flatMap((type, row) =>
       Array.from({ length: COLS }, (_, col) =>
         new Invader(type, col, LEFT + col * CELL + Math.floor((CELL_W - type.w) / 2), top + row * CELL),
       ),
@@ -138,6 +144,7 @@ export class Fleet {
   update(dt: number, level: number): boolean {
     if ((this.stepTimer -= dt) > 0) return false;
     const alive = this.alive;
+    if (!alive.length) return false;
     this.stepTimer = difficulty.marchInterval(alive.length, level);
 
     // Divers keep their slot in the formation while away, so measure the slots.

@@ -49,6 +49,21 @@ export const difficulty = {
     return rand(9, 15) * Math.max(0.5, 1 - (level - 1) * 0.08);
   },
 
+  /** Every 4th wave is a mothership fight instead of a fleet. */
+  isBossWave(level: number): boolean {
+    return level % 4 === 0;
+  },
+
+  /** Mothership hit points: tougher each time it returns. */
+  bossHp(level: number): number {
+    return 40 + 20 * (level / 4);
+  },
+
+  /** Points for destroying the mothership. */
+  bossPoints(level: number): number {
+    return 1000 * (level / 4);
+  },
+
   /** Seconds between shots in a strafing run's rain. */
   strafeFireDelay(level: number): number {
     return Math.max(0.08, 0.14 - level * 0.006);

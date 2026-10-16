@@ -23,6 +23,17 @@ export function drawFooter(g: Gfx, lives: number, muted: boolean): void {
   g.text(muted ? 'SOUND OFF' : 'M: MUTE', W - 8, 246, COLORS.dim, 'right', 7);
 }
 
+/** The mothership's health bar, just under the score line. */
+export function drawBossBar(g: Gfx, fraction: number, enraged: boolean): void {
+  const x = 50;
+  const y = 25;
+  const w = W - x - 8;
+  g.text('MOTHERSHIP', 8, y - 1, enraged ? COLORS.red : COLORS.pink, 'left', 6);
+  g.rect(x - 1, y - 1, w + 2, 5, COLORS.dim);
+  g.rect(x, y, w, 3, COLORS.bg);
+  g.rect(x, y, Math.ceil(w * fraction), 3, enraged ? COLORS.red : COLORS.pink);
+}
+
 const POWER_UP_SLOT = 54;
 
 /**

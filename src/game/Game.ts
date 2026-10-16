@@ -8,10 +8,11 @@ import { clamp, overlap, pick, rand } from '../core/math';
 import { loadHiScore, saveHiScore } from '../core/storage';
 import type { Gfx } from '../gfx/gfx';
 import { Starfield } from '../gfx/starfield';
-import { drawBanner, drawFooter, drawHud, drawOverlay, drawPowerUps, drawTitle } from '../ui/screens';
+import { drawBanner, drawBossBar, drawFooter, drawHud, drawOverlay, drawPowerUps, drawTitle } from '../ui/screens';
+import { BOSS_H, BOSS_W, Boss, type BossHost } from './boss';
 import { difficulty } from './difficulty';
 import { Effects } from './effects';
-import { Fleet, WAVE_INTROS, type Invader } from './fleet';
+import { Fleet, waveIntro, type Invader } from './fleet';
 import { Player } from './player';
 import { ActivePowerUps, GIFT_DROP_CHANCE, Gift } from './powerups';
 import {
@@ -37,6 +38,12 @@ const HOMING_MAX = 160;
 const HOMING_TURN = 900; // how hard a missile can swerve (px/s²)
 const NUKE_FLASH = 0.5;
 const STRAFE_STOP_Y = SHIELD_Y - 24; // strafers stop shooting below this, so the last shots can be dodged
+// Mothership damage taken from each weapon (a normal shot does 1).
+const FIREBALL_BOSS_DAMAGE = 3;
+const LASER_BOSS_DAMAGE = 0.5; // per laser tick
+const NUKE_BOSS_DAMAGE = 10;
+const BOSS_BLAST_GAP = 0.12; // seconds between explosions while it dies
+const SHAKE_DECAY = 12; // shake strength lost per second
 
 /** Dev shortcut: open the game with ?wave=3 to start new games on wave 3. */
 const START_WAVE = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('wave'))) || 1);
@@ -71,8 +78,18 @@ export class Game {
   private enemyFireTimer = 0;
   private ufo: Ufo | null = null;
   private ufoTimer = 0;
+  private boss: Boss | null = null;
+  private bossBlastTimer = 0;
+  private shake = 0;
   private marchStep = 0;
   private lastMarch = 0;
+
+  private readonly bossHost: BossHost = {
+    targetX: () => this.player.centerX,
+    fire: (x, y, vx) => {
+      this.enemyShots.push({ x: Math.round(x) - 1, y, vx, kind: Math.random() < 0.5 ? 0 : 1 });
+    },
+  };
 
   constructor(
     private readonly gfx: Gfx,
@@ -118,6 +135,8 @@ export class Game {
   private newWave(level: number): void {
     this.level = level;
     this.fleet.reset(level);
+    this.boss = difficulty.isBossWave(level) ? new Boss(level, this.sound) : null;
+    if (this.boss) this.sound.bossAlarm();
     this.shields = buildShields();
     this.ufoTimer = rand(...UFO_FIRST_DELAY);
     this.resetRound();
@@ -127,6 +146,7 @@ export class Game {
   private resetRound(): void {
     this.player.reset();
     this.fleet.recallDives();
+    this.boss?.calm();
     this.shots = [];
     this.enemyShots = [];
     this.gift = null;
@@ -157,6 +177,20 @@ export class Game {
     this.powerUps.clear();
     this.removeUfo();
     this.sound.death();
+    this.effects.burst(this.player.centerX, PLAYER_Y + 4, COLORS.green, 30, 80);
+    this.addShake(4);
+  }
+
+  private addShake(strength: number): void {
+    this.shake = Math.max(this.shake, strength);
+  }
+
+  private clearWave(): void {
+    this.state = 'levelclear';
+    this.stateTimer = LEVEL_CLEAR_TIME;
+    this.enemyShots = [];
+    this.gift = null;
+    this.removeUfo();
   }
 
   private gameOver(): void {
@@ -186,6 +220,7 @@ export class Game {
     if (this.state === 'paused') return;
     this.effects.update(dt);
     this.flash = Math.max(0, this.flash - dt);
+    this.shake = Math.max(0, this.shake - dt * SHAKE_DECAY);
 
     switch (this.state) {
       case 'playing':
@@ -225,6 +260,7 @@ export class Game {
       () => this.updateDivers(enemyDt),
       () => this.updateEnemyFire(enemyDt),
       () => this.updateUfo(enemyDt),
+      () => this.updateBoss(enemyDt),
     ];
     for (const step of steps) {
       step();
@@ -279,6 +315,7 @@ export class Game {
       if (!this.active) return;
     }
     if (this.ufo && overlap(beam, this.ufo.rect)) this.destroyUfo(this.ufo);
+    if (this.boss?.vulnerable && overlap(beam, this.boss.rect)) this.hitBoss(LASER_BOSS_DAMAGE, x, this.boss.bottom);
     this.enemyShots = this.enemyShots.filter(e => {
       if (!overlap(beam, enemyShotRect(e))) return true;
       this.effects.sprite('shotBoom', e.x - 3, e.y, COLORS.purple, 0.2);
@@ -330,6 +367,12 @@ export class Game {
       if (!pierce) return true;
     }
 
+    // Even a fireball is spent on the mothership's hull.
+    if (this.boss?.vulnerable && overlap(r, this.boss.rect)) {
+      this.hitBoss(s.fire ? FIREBALL_BOSS_DAMAGE : 1, s.x, r.y);
+      return true;
+    }
+
     // Shots collide mid-air.
     for (let i = this.enemyShots.length - 1; i >= 0; i--) {
       const e = this.enemyShots[i];
@@ -341,10 +384,11 @@ export class Game {
     return false;
   }
 
-  /** Homing missiles swerve towards the nearest invader (or UFO) still above them. */
+  /** Homing missiles swerve towards the nearest invader (or UFO, or mothership) still above them. */
   private steer(s: Shot, dt: number): void {
     const targets = this.fleet.alive.map(i => i.rect);
     if (this.ufo) targets.push(this.ufo.rect);
+    if (this.boss?.vulnerable) targets.push(this.boss.rect);
     let targetX: number | undefined;
     let best = Infinity;
     for (const t of targets) {
@@ -372,6 +416,25 @@ export class Game {
     }
   }
 
+  private hitBoss(amount: number, x: number, y: number): void {
+    const boss = this.boss;
+    if (!boss) return;
+    const dropsGift = boss.damage(amount);
+    this.effects.burst(x, y, COLORS.white, 3, 50);
+    this.sound.bossHit();
+    if (dropsGift && !this.gift) this.gift = new Gift(boss.centerX, boss.bottom);
+    if (!boss.dying) return;
+
+    // Killed: score now, then death throes until updateBoss finishes it off.
+    const points = difficulty.bossPoints(this.level) * this.multiplier;
+    this.addScore(points);
+    this.effects.text(String(points), boss.centerX, boss.y - 8, COLORS.yellow, 2.5);
+    this.enemyShots = [];
+    this.bossBlastTimer = 0;
+    this.sound.bossDeath();
+    this.addShake(3);
+  }
+
   /** Double Points doubles everything scored while it lasts. */
   private get multiplier(): number {
     return this.powerUps.has('double') ? 2 : 1;
@@ -395,18 +458,13 @@ export class Game {
     const points = inv.type.points * (inv.diving ? 2 : 1) * this.multiplier;
     this.addScore(points);
     this.effects.sprite('boom', inv.x + inv.w / 2 - 6.5, inv.y, inv.type.color, 0.25);
+    this.effects.burst(inv.x + inv.w / 2, inv.y + inv.h / 2, inv.type.color, 6, 50);
     if (inv.diving || this.multiplier > 1) {
       this.effects.text(String(points), inv.x + inv.w / 2, inv.y - 9, inv.type.color, 0.8);
     }
     if (!silent) this.sound.hit();
     if (!this.gift && Math.random() < GIFT_DROP_CHANCE) this.gift = new Gift(inv.x + inv.w / 2, inv.y);
-    if (this.fleet.cleared) {
-      this.state = 'levelclear';
-      this.stateTimer = LEVEL_CLEAR_TIME;
-      this.enemyShots = [];
-      this.gift = null;
-      this.removeUfo();
-    }
+    if (this.fleet.cleared) this.clearWave();
   }
 
   private updateDivers(dt: number): void {
@@ -434,7 +492,7 @@ export class Game {
     if (!d?.strafe || d.phase !== 'down' || inv.y > STRAFE_STOP_Y) return;
     if ((d.shotTimer -= dt) > 0) return;
     d.shotTimer = difficulty.strafeFireDelay(this.level);
-    this.enemyShots.push({ x: Math.round(inv.x + inv.w / 2) - 1, y: inv.y + inv.h, kind: 1 });
+    this.enemyShots.push({ x: Math.round(inv.x + inv.w / 2) - 1, y: inv.y + inv.h, vx: 0, kind: 1 });
     this.sound.strafeShot();
   }
 
@@ -476,12 +534,17 @@ export class Game {
     }
   }
 
-  /** Nuke: a white flash that wipes out every enemy bullet, every diver and the whole bottom row. */
+  /**
+   * Nuke: a white flash that wipes out every enemy bullet, every diver and the whole bottom row
+   * (or takes a big bite out of the mothership).
+   */
   private nuke(): void {
     this.flash = NUKE_FLASH;
+    this.addShake(5);
     this.sound.nuke();
     for (const e of this.enemyShots) this.effects.sprite('shotBoom', e.x - 3, e.y, COLORS.orange, 0.3);
     this.enemyShots = [];
+    if (this.boss?.vulnerable) this.hitBoss(NUKE_BOSS_DAMAGE, this.boss.centerX, this.boss.bottom);
     for (const inv of [...this.fleet.bottomRow(), ...this.fleet.divers]) {
       this.destroyInvader(inv, true);
       if (!this.active) return;
@@ -495,8 +558,11 @@ export class Game {
     for (let i = this.enemyShots.length - 1; i >= 0; i--) {
       const s = this.enemyShots[i];
       s.y += speed * dt;
+      s.x += s.vx * dt;
       const r = enemyShotRect(s);
-      if (hitShields(this.shields, r, 3)) {
+      if (s.x < -ENEMY_SHOT.w || s.x > W) {
+        this.enemyShots.splice(i, 1);
+      } else if (hitShields(this.shields, r, 3)) {
         this.enemyShots.splice(i, 1);
       } else if (bubble && overlap(r, bubble)) {
         this.effects.sprite('shotBoom', s.x - 3, bubble.y - 4, COLORS.yellow, 0.2);
@@ -542,6 +608,7 @@ export class Game {
     this.enemyShots.push({
       x: Math.round(shooter.x + shooter.w / 2) - 1,
       y: shooter.y + shooter.h,
+      vx: 0,
       kind: Math.random() < 0.5 ? 0 : 1,
     });
   }
@@ -561,6 +628,53 @@ export class Game {
     if (this.ufo.gone) this.removeUfo();
   }
 
+  private updateBoss(dt: number): void {
+    const boss = this.boss;
+    if (!boss) return;
+    boss.update(dt, this.bossHost);
+
+    if (boss.dying) {
+      // Death throes: explosions all over the hull, then one big blast.
+      if ((this.bossBlastTimer -= dt) <= 0) {
+        this.bossBlastTimer = BOSS_BLAST_GAP;
+        const x = boss.x + rand(0, BOSS_W);
+        const y = boss.y + rand(0, BOSS_H);
+        const color = pick([COLORS.orange, COLORS.yellow, COLORS.red, COLORS.white]);
+        this.effects.sprite('boom', x - 6.5, y - 4, color, 0.25);
+        this.effects.burst(x, y, color, 6, 70);
+        this.sound.bossBlast();
+        this.addShake(2);
+      }
+      if (boss.dead) this.finishBoss(boss);
+      return;
+    }
+
+    const beam = boss.beamRect;
+    if (!beam) return;
+    // The beam melts bunkers, rattles the screen, and only the Shield power-up survives it.
+    eraseShields(this.shields, beam);
+    this.addShake(1);
+    const bubble = this.powerUps.has('shield') ? this.player.shieldRect : null;
+    if (!(bubble && overlap(beam, bubble)) && overlap(beam, this.player.rect)) this.killPlayer();
+  }
+
+  private finishBoss(boss: Boss): void {
+    const cx = boss.centerX;
+    const cy = boss.y + BOSS_H / 2;
+    this.boss = null;
+    this.flash = NUKE_FLASH;
+    this.addShake(7);
+    this.sound.nuke();
+    for (const color of [COLORS.pink, COLORS.orange, COLORS.yellow, COLORS.white]) {
+      this.effects.burst(cx, cy, color, 25, 130);
+    }
+    for (let i = 0; i < 6; i++) {
+      this.effects.sprite('boom', cx + rand(-20, 20) - 6.5, cy + rand(-10, 10) - 4, COLORS.orange, 0.5);
+    }
+    this.clearWave();
+    this.stateTimer += 1.5; // a moment to enjoy it
+  }
+
   // ---------- Render ----------
 
   render(): void {
@@ -568,6 +682,7 @@ export class Game {
     g.clear(COLORS.bg);
     this.stars.draw(g, this.time);
     drawHud(g, this.score, this.hi, this.level);
+    if (this.boss) drawBossBar(g, this.boss.hp / this.boss.maxHp, this.boss.enraged);
 
     if (this.state === 'title') {
       drawTitle(g, this.time);
@@ -586,15 +701,19 @@ export class Game {
         });
         break;
       case 'levelclear':
-        drawBanner(g, `WAVE ${this.level + 1}`, WAVE_INTROS[this.level + 1]);
+        drawBanner(g, `WAVE ${this.level + 1}`, waveIntro(this.level + 1));
         break;
     }
   }
 
   private drawWorld(): void {
     const g = this.gfx;
+    const shake = this.state === 'paused' ? 0 : this.shake;
+    g.offset(rand(-shake, shake), rand(-shake, shake));
+
     const ice = this.powerUps.has('freeze') ? COLORS.ice : undefined;
     this.ufo?.draw(g, ice);
+    this.boss?.draw(g, this.time, ice);
     this.fleet.draw(g, ice);
     for (const s of this.shields) s.draw(g);
 
@@ -615,5 +734,6 @@ export class Game {
     if (this.flash > 0) g.rect(0, 0, W, H, COLORS.white, (this.flash / NUKE_FLASH) * 0.7);
     drawFooter(g, this.lives, this.sound.muted);
     drawPowerUps(g, this.time, this.powerUps.entries());
+    g.offset(0, 0);
   }
 }

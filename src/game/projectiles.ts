@@ -18,6 +18,8 @@ export interface Shot {
 export interface EnemyShot {
   x: number;
   y: number;
+  /** Sideways drift (px/s) — the mothership fires angled shots. */
+  vx: number;
   /** 0 = zigzag, 1 = plunger (visual only). */
   kind: 0 | 1;
 }
@@ -74,11 +76,12 @@ const PLUNGER = [1, 3, 5, 3];
 
 export function drawEnemyShot(g: Gfx, s: EnemyShot, time: number): void {
   const f = Math.floor(time * 12) % 4;
+  const x = Math.round(s.x);
   const y = Math.round(s.y);
   if (s.kind === 0) {
-    for (let r = 0; r < ENEMY_SHOT.h; r++) g.rect(s.x + ZIGZAG[(r + f) % 4], y + r, 1, 1, COLORS.white);
+    for (let r = 0; r < ENEMY_SHOT.h; r++) g.rect(x + ZIGZAG[(r + f) % 4], y + r, 1, 1, COLORS.white);
   } else {
-    g.rect(s.x + 1, y, 1, ENEMY_SHOT.h, COLORS.white);
-    g.rect(s.x, y + PLUNGER[f], ENEMY_SHOT.w, 1, COLORS.white);
+    g.rect(x + 1, y, 1, ENEMY_SHOT.h, COLORS.white);
+    g.rect(x, y + PLUNGER[f], ENEMY_SHOT.w, 1, COLORS.white);
   }
 }

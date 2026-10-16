@@ -46,6 +46,21 @@ export class Sound {
   dive(): void { this.tone(1200, 0.6, { to: 300, vol: 0.06, type: 'triangle' }); }
   shieldBlock(): void { this.tone(1500, 0.1, { to: 600, vol: 0.1, type: 'triangle' }); }
   ufoHit(): void { this.tone(1200, 0.5, { to: 150, vol: 0.12, type: 'sawtooth' }); }
+  bossAlarm(): void {
+    [0, 1, 2, 3, 4, 5].forEach(i => setTimeout(() => this.tone(i % 2 ? 220 : 330, 0.3, { vol: 0.1 }), i * 320));
+  }
+  bossShot(): void { this.tone(420, 0.12, { to: 140, vol: 0.06, type: 'sawtooth' }); }
+  bossHit(): void { this.tone(320, 0.05, { to: 180, vol: 0.06 }); }
+  bossCharge(): void { this.tone(150, 1, { to: 1400, vol: 0.08, type: 'sawtooth' }); }
+  bossBeam(seconds: number): void {
+    this.tone(95, seconds, { to: 70, vol: 0.16, type: 'sawtooth' });
+    this.noise(seconds, 0.12, 1800);
+  }
+  bossBlast(): void { this.noise(0.3, 0.3, 1400); }
+  bossDeath(): void {
+    this.noise(2.2, 0.7, 400);
+    this.tone(220, 2, { to: 20, vol: 0.2, type: 'sawtooth' });
+  }
   strafeAlarm(): void {
     [0, 1, 2, 3].forEach(i => setTimeout(() => this.tone(i % 2 ? 660 : 990, 0.15, { vol: 0.07 }), i * 160));
   }

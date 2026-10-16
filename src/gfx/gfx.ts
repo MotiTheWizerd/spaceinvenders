@@ -17,6 +17,11 @@ export class Gfx {
     this.rect(0, 0, W, H, color);
   }
 
+  /** Shifts everything drawn after this by (x, y) logical pixels — used for screen shake. */
+  offset(x: number, y: number): void {
+    this.ctx.setTransform(SCALE, 0, 0, SCALE, Math.round(x * SCALE), Math.round(y * SCALE));
+  }
+
   rect(x: number, y: number, w: number, h: number, color: string, alpha = 1): void {
     this.ctx.globalAlpha = alpha;
     this.ctx.fillStyle = color;

@@ -18,7 +18,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
   return node;
 }
 
-function loadHiScore(key: string): number {
+function loadBest(key: string): number {
   try {
     return Number(localStorage.getItem(key)) || 0;
   } catch {
@@ -52,9 +52,9 @@ function gameCard(game: GameEntry, previews: LivePreview[]): HTMLElement {
   body.append(controls);
 
   const footer = el('div', 'card-footer');
-  const hi = game.hiScoreKey ? loadHiScore(game.hiScoreKey) : 0;
+  const { best } = game;
   footer.append(
-    el('span', 'hi', game.hiScoreKey ? `HI-SCORE ${String(hi).padStart(5, '0')}` : ''),
+    el('span', 'hi', best ? `${best.label} ${best.format(loadBest(best.key))}` : ''),
     el('span', 'play', '▶ PLAY'),
   );
   body.append(footer);
@@ -85,8 +85,15 @@ grid.append(...GAMES.map(g => gameCard(g, previews)), comingSoonCard());
 const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const start = performance.now();
 const frame = (now: number) => {
-  const time = (now - start) / 1000;
-  for (const p of previews) p.draw(p.ctx, still ? 2 : time);
   if (!still) requestAnimationFrame(frame);
+  // rAF timestamps can be a touch earlier than `start`; previews expect time >= 0.
+  const time = Math.max(0, (now - start) / 1000);
+  for (const p of previews) {
+    try {
+      p.draw(p.ctx, still ? 2 : time);
+    } catch (err) {
+      console.error(err); // one broken preview mustn't freeze the others
+    }
+  }
 };
 requestAnimationFrame(frame);

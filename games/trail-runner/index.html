@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trail Runner &middot; Pixel Arcade</title>
+</head>
+<body>
+  <canvas id="scene" aria-label="Trail Runner game"></canvas>
+
+  <div class="hud">
+    <div class="stats">
+      <div class="stat"><span class="label">TRAIL</span><span class="value" id="distance">0 m</span></div>
+      <div class="stat"><span class="label">COINS</span><span class="value coin" id="coins">0</span></div>
+      <div class="stat best"><span class="label">BEST</span><span class="value" id="best">0 m</span></div>
+    </div>
+    <div class="buttons">
+      <a class="btn" href="../../">&#9664; ARCADE</a>
+      <button class="btn" id="sound" type="button">SOUND ON</button>
+      <button class="btn" id="pause" type="button">PAUSE</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="panel">
+      <h1 id="overlay-title">TRAIL RUNNER</h1>
+      <p id="overlay-text"></p>
+      <p class="result" id="overlay-result"></p>
+      <p class="prompt" id="overlay-prompt"></p>
+      <p class="keys">&larr; &rarr; CHANGE LANE &middot; &uarr; / SPACE JUMP &middot; &darr; SLIDE &middot; P PAUSE &middot; M MUTE</p>
+    </div>
+  </div>
+
+  <script type="module" src="/src/games/trail-runner/main.ts"></script>
+</body>
+</html>

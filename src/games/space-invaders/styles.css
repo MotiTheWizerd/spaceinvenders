@@ -20,6 +20,20 @@ body { display: grid; place-items: center; overflow: hidden; }
   image-rendering: pixelated;
 }
 
+.back {
+  position: fixed;
+  top: 12px;
+  left: 14px;
+  z-index: 1;
+  font: bold 13px "Courier New", monospace;
+  letter-spacing: 1px;
+  color: #5b6475;
+  text-decoration: none;
+}
+
+.back:hover,
+.back:focus-visible { color: #39ff6a; }
+
 /* CRT scanlines */
 .cabinet::after {
   content: '';

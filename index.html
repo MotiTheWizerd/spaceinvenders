@@ -3,12 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Space Invenders</title>
+  <title>Pixel Arcade</title>
 </head>
 <body>
-  <div class="cabinet">
-    <canvas id="game" aria-label="Space Invaders game"></canvas>
-  </div>
-  <script type="module" src="/src/main.ts"></script>
+  <div class="horizon" aria-hidden="true"></div>
+  <header class="marquee">
+    <h1 class="logo">PIXEL <span>ARCADE</span></h1>
+    <p class="subtitle">INSERT COIN &middot; CHOOSE YOUR GAME</p>
+  </header>
+  <main id="games" class="grid" aria-label="Games"></main>
+  <footer class="credits">&copy; PIXEL ARCADE &middot; ALL GAMES RUN IN YOUR BROWSER</footer>
+  <script type="module" src="/src/gallery/main.ts"></script>
 </body>
 </html>
